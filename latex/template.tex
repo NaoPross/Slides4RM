@@ -1,0 +1,63 @@
+\documentclass{article}
+
+\usepackage[
+  % a4paper, 
+  paperheight=20.96cm,
+  paperwidth=15.7cm,
+  hmargin=5mm,
+  vmargin=2cm,
+  marginpar=0cm,
+  % showframe,
+]{geometry}
+
+\usepackage{graphicx}
+\usepackage{titling}
+
+\usepackage{roboto}
+\usepackage{roboto-mono}
+
+\usepackage{fancyhdr}
+\fancyhf{}
+\fancyhead[L]{\ttfamily\thetitle}
+\fancyhead[R]{\sffamily\slshape\bfseries\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\pagestyle{fancy}
+
+\usepackage{tikz}
+\usetikzlibrary{calc}
+
+% allow underscores in names
+\catcode`\_=12\relax
+
+\title{TITLE}
+\def\slides{SLIDESFILE}
+\def\slidescount{SLIDESCOUNT}
+\def\slideswidth{SLIDESWIDTH}
+
+\tikzset{
+  pics/dotted grid/.style={
+    code={
+      \foreach \i in {-18,-17,...,18}{
+        \foreach \j in {0,1,2,...,22}{
+          \draw[draw=white, fill=lightgray, opacity=.5] 
+            (0,-1cm) ++(\i * 4mm, -\j * 4mm) circle (1pt);
+        }
+      }
+    }
+  }
+}
+
+\begin{document}
+
+
+\foreach \slide in {1,2,...,\slidescount}{
+  \begin{tikzpicture}[remember picture, overlay]
+    \node[draw=black, thick] at ($(current page.center) + (0, {.2*\paperheight})$)
+      {\includegraphics[width={\slideswidth}, page=\slide]{\slides}};
+    \pic at (current page.center) {dotted grid};
+  \end{tikzpicture}
+  \newpage
+}
+
+\end{document}
+% vim: ts=2 sw=2 et:

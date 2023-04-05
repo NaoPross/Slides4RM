@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Upload{% endblock %}
+{% block head %}
+  {{ super() }}
+  <style>
+    .file-area {
+      width: 100%;
+      position: relative;
+      font-size: 18px;
+    }
+
+    .file-area input[type=file] {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0; left: 0; right: 0; bottom: 0;
+      opacity: 0;
+    }
+
+    .file-area .file-dummy {
+      border: 2px dashed var(--border);
+      border-radius: var(--standard-border-radius);
+      padding: 50px 30px;
+      text-align: center;
+      transition: background 0.5s ease-in-out;
+    }
+
+    .file-area .file-dummy .file-success {
+      display: none;
+    }
+
+    .file-area:hover .file-dummy {
+      border: 2px dashed var(--accent);
+    }
+
+    .file-area input[type=file]:valid + .file-dummy {
+    }
+
+    .file-area input[type=file]:valid + .file-dummy .file-success {
+      display: inline-block;
+    }
+
+    .file-area input[type=file]:valid + .file-dummy .file-default {
+      display: none;
+    }
+  </style>
+{% endblock %}
+
+{% block header %}
+  <h1>Convert to Handout</h1>
+{% endblock %}
+{% block main %}
+  <p class="notice">The file(s) must be in PDF format, and may not exceed 50 MB in size!</p>
+  <form method=post enctype=multipart/form-data>
+    <div class="file-area">
+      <input id="file-input" type="file" multiple name="file[]" required onchange="updateFileList()">
+      <div class="file-dummy">
+        <span class="file-default"><strong>Click here</strong> or drop your file(s)</span>
+        <span class="file-success"><strong>Click again</strong> or drop a different file</span>
+        <br>
+        <span id="file-list" style="display: none"></span>
+        <script>
+          function updateFileList() {
+            var files = document.getElementById("file-input").files;
+            var list = document.getElementById("file-list");
+
+            if (files.length < 1) {
+              list.style = "display: none";
+              return;
+            }
+
+            list.innerHTML = Array.from(files).map(f => f.name).join(", ");
+            console.log(list.innerHTML);
+            list.style = "font-family: var(--mono-font);";
+          }
+          updateFileList()
+        </script>
+      </div>
+    </div>
+    <input type="submit" value="Upload">
+  </form>
+{% endblock %}
+
+<!--
+  vim:ts=2 sw=2 et:
+  --!/>

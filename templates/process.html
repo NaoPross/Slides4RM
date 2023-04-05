@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Processing{% endblock %}
+{% block head %}
+  {{ super() }}
+  <style>
+    progress::-webkit-progress-value {
+      transition: width 1s ease-out !important;
+    }
+    /* FIXME */
+    progress::-moz-progress-bar {
+      transition-property: width !important;
+      transition-duration: 1s ease-out !important;
+    }
+  </style>
+{% endblock %}
+
+{% block header %}
+  <h1>Processing</h1>
+{% endblock %}
+{% block main %}
+  <p>Your files are being processed, they will appear soon below.</p>
+  <progress id="pdfprogress" max="100" value="0"></progress>
+  <p class="notice">
+    The process is quite slow for PDFs with a large number of pages.
+    Please be parient.
+  </p>
+  {% block filelist %}
+    <ul id="pdful">
+      <script>
+        function updateProgressBar() {
+          var nfiles = new URLSearchParams(window.location.search).get("nfiles");
+          var pdful = document.getElementById("pdful");
+          var progressbar = document.getElementById("pdfprogress");
+          var processed = pdful.getElementsByTagName("li").length;
+          progressbar.value = (processed / nfiles * 100);
+          // if (nfiles - processed < 1) {
+          //   for (var b of document.getElementsByTagName("button")) {
+          //     b.disabled = false
+          //   }
+          // }
+        }
+        var pdful = document.getElementById("pdful");
+        const observer = new MutationObserver(updateProgressBar);
+        const config = { attributes: false, childList: true, subtree: true };
+        observer.observe(pdful, config);
+      </script>
+      {% for f, s in pdfs %}
+      <li>
+        <form action="{{ url_for('download', filename=f) }}" method="get" target="_blank">
+          {% if s %}
+            <button download>Download</button>&emsp;
+          {% else %}
+            <strong>Failed</strong>
+          {% endif %}
+          <span style="font-family: var(--mono-font);">{{ f }}</span><br>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  {% endblock %}
+{% endblock %}
+
+<!--
+  vim:ts=2 sw=2 et:
+  --!/>

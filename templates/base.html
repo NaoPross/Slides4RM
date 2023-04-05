@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    {% block head %}
+    <link rel="stylesheet", href="{{ url_for('static', filename='simple-v2.css') }}">
+    <title>{% block title %}{% endblock %}</title>
+    {% endblock %}
+  </head>
+  <body>
+    <header>
+      <nav></nav>
+      {% block header %}{% endblock %}
+    </header>
+    <main>
+      {% block main %}{% endblock %}
+    </main>
+  </body>
+</html>
+<!--
+  vim:ts=2 sw=2 et:
+  --!/>
