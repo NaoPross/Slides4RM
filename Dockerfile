@@ -19,5 +19,5 @@ RUN python3 -m ensurepip && python3 -m pip install pyuwsgi colorlog werkzeug fla
 
 COPY . /home/u
 
-ENTRYPOINT ["uwsgi", "--http-socket", ":8000", "--master", "-p", "4", "-w", "slides4rm:app"]
+ENTRYPOINT ["uwsgi", "--http", ":8000", "--enable-threads", "--harakiri", "180", "--master", "-p", "4", "-w", "slides4rm:app"]
 EXPOSE 8000

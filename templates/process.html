@@ -23,40 +23,122 @@
   <progress id="pdfprogress" max="100" value="0"></progress>
   <p class="notice">
     The process is quite slow for PDFs with a large number of pages.
-    Please be parient.
+    Please be patient.
   </p>
   {% block filelist %}
     <ul id="pdful">
       <script>
-        function updateProgressBar() {
-          var nfiles = new URLSearchParams(window.location.search).get("nfiles");
-          var pdful = document.getElementById("pdful");
+        function updateProgressBar(nfiles) {
           var progressbar = document.getElementById("pdfprogress");
+          var pdful = document.getElementById("pdful");
           var processed = pdful.getElementsByTagName("li").length;
           progressbar.value = (processed / nfiles * 100);
-          // if (nfiles - processed < 1) {
-          //   for (var b of document.getElementsByTagName("button")) {
-          //     b.disabled = false
-          //   }
-          // }
         }
-        var pdful = document.getElementById("pdful");
-        const observer = new MutationObserver(updateProgressBar);
-        const config = { attributes: false, childList: true, subtree: true };
-        observer.observe(pdful, config);
+
+        function getStatus(filename) {
+          return new Promise(function (resolve, reject) {
+            var req = new XMLHttpRequest();
+            req.open("GET", "/status/" + filename);
+            req.responseType = "text";
+            req.onload = function() {
+              if (req.status == 200) {
+                resolve({
+                  "name": filename,
+                  "status": req.responseText
+                });
+              } else {
+                reject(false);
+              }
+            };
+            req.send(null);
+          });
+        }
+
+        function updateDownloadList(f, success) {
+          const ul = document.getElementById("pdful");
+          var li = document.getElementById("pdfli-" + f.name);
+          
+          if (li === null) {
+            li = document.createElement("li");
+            li.id = "pdfli-" + f.name;
+
+            const span = document.createElement("span");
+            span.innerHTML = f.name;
+            span.style = "font-family: var(--mono-font);"
+
+            if (success) {
+              const form = document.createElement("form")
+              const btn = document.createElement("button")
+
+              btn.innerHTML = "Download";
+              btn.download = true;
+
+              form.action = "/download/" + f.name.replace(/\.[^/.]+$/, "_ReMarkable.pdf");
+              form.method = "GET";
+              form.target = "_blank";
+
+              form.appendChild(btn);
+              form.innerHTML += "&emsp;";
+              form.appendChild(span);
+
+              li.appendChild(form);
+
+            } else {
+              const st = document.createElement("strong");
+              st.innerHTML = "Failed";
+              li.appendChild(st);
+              li.innerHTML += "&emsp;";
+              li.appendChild(span);
+            }
+
+            ul.appendChild(li);
+          } else {
+            if (success) {
+              
+            }
+          }
+        }
+
+        function updateDownloadLi(f) {
+          const ul = document.getElementById("pdful");
+          const li = document.getElementById("pdfli-" + f.name);
+        }
+
+        function updateFileList() {
+          const nfiles = {{ nfiles }};
+          const filenames = {{ filenames|tojson }};
+
+          var pdful = document.getElementById("pdful");
+          var processed = pdful.getElementsByTagName("li").length;
+
+          Promise.all(filenames.map(getStatus)).then((results) => {
+            var allDone = results.map((f) => {
+              console.log(f.name, f.status);
+              switch (f.status) {
+                case "done":
+                  updateDownloadList(f, true);
+                  updateProgressBar(nfiles);
+                  return true;
+                  break;
+
+                case "failed":
+                  updateDownloadList(f, false);
+                  return true;
+                  break;
+
+                default:
+                  return false;
+              }
+            }).every(e => e);
+
+            if (!allDone && processed < nfiles) {
+              setTimeout(updateFileList, 1500);
+            }
+          });
+        }
+
+        updateFileList();
       </script>
-      {% for f, s in pdfs %}
-      <li>
-        <form action="{{ url_for('download', filename=f) }}" method="get" target="_blank">
-          {% if s %}
-            <button download>Download</button>&emsp;
-          {% else %}
-            <strong>Failed</strong>
-          {% endif %}
-          <span style="font-family: var(--mono-font);">{{ f }}</span><br>
-        </form>
-      </li>
-      {% endfor %}
     </ul>
   {% endblock %}
 {% endblock %}

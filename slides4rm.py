@@ -14,7 +14,7 @@ import colorlog as logging
 from werkzeug.utils import secure_filename
 from pdfminer import pdfparser, pdfdocument, pdfinterp, pdfpage
 from flask import (Flask, request, flash, redirect, url_for, render_template,
-                   stream_template, send_file)
+                   stream_template, send_file, session)
 
 
 # ┏━╸┏━┓┏┓╻┏━╸╻┏━╸╻ ╻┏━┓┏━┓╺┳╸╻┏━┓┏┓╻
@@ -27,55 +27,74 @@ if app.config['DEBUG']:
     UPLOAD_FOLDER = './debug/upload/'
     RENDER_FOLDER = './debug/render/'
 else:
-    UPLOAD_FOLDER = '/tmp/upload'
-    RENDER_FOLDER = '/tmp/render'
+    UPLOAD_FOLDER = '/tmp/upload/'
+    RENDER_FOLDER = '/tmp/render/'
 
 MAX_FILE_SIZE = 50 * 1000 * 1000
 ALLOWED_EXTENSIONS = ['.pdf']
 
 LATEX = ['xelatex', '-interaction=batchmode', '-no-shell-escape', '-halt-on-error']
 LATEX_TEMPLATE_FILE = './latex/template.tex'
+LATEX_TEMPLATE_GRID = './latex/grid.pdf'
 LATEX_NITER=2
 
 # ╻ ╻┏━╸╻  ┏━┓┏━╸┏━┓┏━┓
 # ┣━┫┣╸ ┃  ┣━┛┣╸ ┣┳┛┗━┓
 # ╹ ╹┗━╸┗━╸╹  ┗━╸╹┗╸┗━┛
 
-# Read template
-with pathlib.Path(LATEX_TEMPLATE_FILE).resolve().open('r') as f:
-    LATEX_TEMPLATE = f.read()
+
 
 # Create upload folders if the do not exist
 for folder in map(lambda n: pathlib.Path(n), [UPLOAD_FOLDER, RENDER_FOLDER]):
     if not folder.exists():
         folder.mkdir(parents=True)
 
+# Prepare LaTeX template
+grid = pathlib.Path(LATEX_TEMPLATE_GRID).resolve()
+shutil.copy(grid, pathlib.Path(RENDER_FOLDER).resolve())
+
+with pathlib.Path(LATEX_TEMPLATE_FILE).resolve().open('r') as f:
+    LATEX_TEMPLATE = f.read()
+
+
+# Setup thread executor for xelatex
+executor = ThreadPoolExecutor(max_workers=2)
+futures = {}
+
 
 def render_latex(filename):
-    pdffile = pathlib.Path(UPLOAD_FOLDER).joinpath(filename).resolve()
+    pdffile = pathlib.Path(UPLOAD_FOLDER) \
+                .joinpath(filename) \
+                .resolve()
+
     texfile = pathlib.Path(RENDER_FOLDER) \
                 .joinpath(pdffile.stem + '_ReMarkable') \
                 .with_suffix('.tex') \
                 .resolve()
 
-    assert(pdffile.is_file())
+    app.logger.debug(f"Processing {pdffile.name} => {texfile.name}")
 
     # Grab metadata from PDF
     npages = None
     aratio = None
-    with pdffile.open('rb') as f:
-        parser = pdfparser.PDFParser(f)
-        pdf = pdfdocument.PDFDocument(parser)
+    try:
+        with pdffile.open('rb') as f:
+            parser = pdfparser.PDFParser(f)
+            pdf = pdfdocument.PDFDocument(parser)
 
-        # get number of pages
-        npages = pdfinterp.resolve1(pdf.catalog['Pages'])['Count']
+            # get number of pages
+            npages = pdfinterp.resolve1(pdf.catalog['Pages'])['Count']
 
-        # get page aspect ratio
-        page = next(pdfpage.PDFPage.create_pages(pdf))
-        width = page.mediabox[2] - page.mediabox[0] 
-        height = page.mediabox[3] - page.mediabox[1]
-        aratio = width / height
-        # print(f'aratio={aratio}, 16:9={16/9:.4f}, 4:3={4/3:.4f}')
+            # get page aspect ratio
+            page = next(pdfpage.PDFPage.create_pages(pdf))
+            width = page.mediabox[2] - page.mediabox[0] 
+            height = page.mediabox[3] - page.mediabox[1]
+            aratio = width / height
+
+    except:
+        app.logger.warning(f"Failed to parse PDF file {pdffile}")
+        if pdffile.is_file():
+            pdffile.unlink()
 
     assert(npages is not None)
     assert(aratio is not None)
@@ -107,7 +126,8 @@ def render_latex(filename):
         for _ in range(LATEX_NITER):
             p = subprocess.run(cmd, check=True, cwd=texfile.parent)
     except subprocess.CalledProcessError: 
-        cleanup_tex()
+        if not app.config['DEBUG']:
+            cleanup_tex()
         return pdffile, False
 
     cleanup_tex()
@@ -125,9 +145,8 @@ if not app.config['DEBUG']:
     app.config['SERVER_NAME'] = SERVER_NAME
     # Fix for proxy
     from werkzeug.middleware.proxy_fix import ProxyFix
-    app.wsgi_app = ProxyFix(
-        app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
-    )
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1,
+                            x_proto=1, x_host=1, x_prefix=1)
 
 
 @app.route('/')
@@ -138,39 +157,57 @@ def main():
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
-        filenames = []
+        errors = []
+        session['filenames'] = []
+
         for f in request.files.getlist('file[]'):
             filename = pathlib.Path(secure_filename(f.filename))
             if not filename.suffix in ALLOWED_EXTENSIONS:
-                # TODO report error
+                errors = f"{f.name} is not a PDF!"
                 continue
 
-            filenames.append(filename.name)
             filepath = pathlib.Path(UPLOAD_FOLDER).joinpath(filename).resolve()
             f.save(filepath)
 
-        if not filenames:
-            flash('No files were given or they cannot be processed.')
-            return redirect(request.url)
+            futures[filename.name] = executor.submit(render_latex, filename.name)
+            session['filenames'].append(filename.name)
 
-        return redirect(url_for('process', filenames=filenames, nfiles=len(filenames)))
+        session['nfiles'] = len(session['filenames'])
+        return redirect(url_for('process', errors=errors))
 
     return render_template("upload.html")
 
 
 @app.route('/process')
 def process():
-    filenames = request.args.getlist('filenames')
-    nfiles = request.args.get('nfiles')
+    if not ('filenames' in session.keys() and 'nfiles' in session.keys()):
+        return redirect(url_for('upload'))
 
-    def generate():
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {executor.submit(render_latex, src) for src in filenames}
-            for future in as_completed(futures):
-                f, success = future.result()
-                yield f.name, success
+    return render_template("process.html", nfiles=session['nfiles'],
+                           filenames=session['filenames'])
 
-    return stream_template("process.html", pdfs=generate(), nfiles=nfiles)
+
+@app.route('/status/<filename>')
+def status(filename):
+    if not filename in futures.keys():
+        return "not found"
+
+    future = futures[filename]
+
+    if future.running():
+        return "running"
+
+    elif future.cancelled():
+        return "cancelled"
+
+    elif future.done():
+        _, success = future.result()
+        if success:
+            return "done"
+        else:
+            return "failed"
+
+    return "unknown"
 
 
 @app.route('/download/<filename>')
@@ -178,7 +215,10 @@ def download(filename):
     if not filename:
         return "No file given", 400
 
-    f = pathlib.Path(RENDER_FOLDER).joinpath(filename).resolve()
+    f = pathlib.Path(RENDER_FOLDER) \
+            .joinpath(secure_filename(filename)) \
+            .resolve()
+
     if not f.is_file():
         return "file not found", 404
 

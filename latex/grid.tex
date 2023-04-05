@@ -1,0 +1,22 @@
+\documentclass[]{standalone}
+\usepackage{tikz}
+
+\tikzset{
+  pics/dotted grid/.style={
+    code={
+      \foreach \i in {-18,-17,...,18}{
+        \foreach \j in {0,1,2,...,22}{
+          \draw[draw=white, fill=lightgray, opacity=.5] 
+            (0,0) ++(\i * 4mm, -\j * 4mm) circle (1pt);
+        }
+      }
+    }
+  }
+}
+
+\begin{document}
+  \begin{tikzpicture}
+    \pic {dotted grid};
+  \end{tikzpicture}
+\end{document}
+% vim: ts=2 sw=2 et:
