@@ -1,8 +1,8 @@
 # Slides for ReMarkable
 
-Convert slides to handouts to take notes with the ReMarkable tablet.
+Convert slides (PDFs) to handouts to take notes with the ReMarkable tablet.
 
-**NOTE:** I built this in an afternoon, and it is very inefficient, but it works! I'll improve it when I find some time. Self host at your own risk.
+**NOTE:** I built this in an afternoon so it's a bit crappy, but it works well enough for me. I'll improve it when I find some time. Self host at your own risk.
 
 To run this:
 
